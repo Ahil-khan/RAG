@@ -11,7 +11,7 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_chroma import Chroma
+from langchain_community.vectorstores import FAISS   # <-- switched to FAISS
 
 # ── Setup ──────────────────────────────────────────────────────────────────────
 load_dotenv()
@@ -32,7 +32,10 @@ if not api_key:
 # ── Initialize Models ──────────────────────────────────────────────────────────
 embeddings, llm = None, None
 if api_key:
-    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
+        model_kwargs={"device": "cpu"}   # force CPU for Streamlit Cloud
+    )
     llm = ChatGroq(groq_api_key=api_key, model_name="openai/gpt-oss-20b")
 
 # ── Upload PDFs ────────────────────────────────────────────────────────────────
@@ -63,12 +66,12 @@ if uploaded_files and embeddings:
     st.success(f"✅ Loaded {len(all_docs)} pages from {len(uploaded_files)} PDFs")
 
     # ── Chunking ──────────────────────────────────────────────────────────────
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     splits = text_splitter.split_documents(all_docs)
 
-    # ── Vectorstore ───────────────────────────────────────────────────────────
-    vectorstore = Chroma.from_documents(splits, embeddings)
-    retriever = vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": 5, "fetch_k": 20})
+    # ── Vectorstore (FAISS instead of Chroma) ──────────────────────────────────
+    vectorstore = FAISS.from_documents(splits, embeddings)
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
 
     st.sidebar.write(f"🔍 Indexed {len(splits)} chunks for retrieval")
 
@@ -132,7 +135,7 @@ if uploaded_files and embeddings:
             standalone_q = user_q
 
         # 2) Retrieve docs
-        docs = retriever.invoke(standalone_q)
+        docs = retriever.get_relevant_documents(standalone_q)
 
         if not docs:
             answer = "Out of scope - not found in provided documents."
