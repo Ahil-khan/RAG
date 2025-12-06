@@ -135,7 +135,9 @@ if uploaded_files and embeddings:
             standalone_q = user_q
 
         # 2) Retrieve docs
-        docs = retriever.get_relevant_documents(standalone_q)
+        docs = retriever.invoke(standalone_q)
+
+        ##docs = retriever.get_relevant_documents(standalone_q)
 
         if not docs:
             answer = "Out of scope - not found in provided documents."
@@ -172,3 +174,4 @@ if uploaded_files and embeddings:
 
 else:
     st.info("Enter your API key and upload PDFs to begin.")
+
